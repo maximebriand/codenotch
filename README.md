@@ -15,6 +15,84 @@ still working, done, or waiting on you.**
 
 </div>
 
+> [!NOTE]
+> **This is a fork** of [vinzdg/codenotch](https://github.com/vinzdg/codenotch),
+> kept on the [`hub`](../../tree/hub) branch. It turns the notch from a usage
+> meter into a hub: what your agents are waiting on, what to run, and what is
+> playing. Everything upstream does still works as described below; the
+> differences are listed in [What this fork adds](#what-this-fork-adds).
+
+## What this fork adds
+
+Three more cells after the rings — each hovered for its own card — and a panel.
+
+### 🔔 To do: sessions waiting on you
+
+The bell counts the Claude Code sessions that need you, and its card lists
+them: a session **blocked** on a question or a permission (yellow), or one
+whose **turn just ended** (green). Each row gives the conversation's title,
+its folder, and what it asked — the `AskUserQuestion` text, the command
+waiting for approval — or the start of its reply. **→** takes you there,
+**✕** clears the row. A new arrival opens the notch on the list; a row leaves
+by itself once the session moves on.
+
+Read from Claude Code's own session registry and transcript
+(`ai-title`/`custom-title`, the last unanswered `tool_use`, the last text).
+
+### Going to the right Wave tab
+
+"Go there" reaches the exact [Wave](https://www.waveterm.dev) block, not just
+the app — across tabs:
+
+- Wave is raised through Launch Services. `NSRunningApplication.activate()` is
+  quietly refused on macOS 14+ when the caller is not active, and the notch
+  never is.
+- The tab is chosen with Wave's own **⌘1…⌘9**, its position read from Wave's
+  database. The digit is sent as a character, so it works on AZERTY too.
+  Needs **Accessibility** permission. Past the ninth tab, the tab is badged
+  instead.
+- `wsh focusblock` then selects the block, with the session's own
+  `WAVETERM_JWT`/`BLOCKID`/`TABID`.
+
+### ⌥⌘S: every session at once
+
+A keyboard panel listing every running agent session, grouped by app and Wave
+workspace, waiting ones first. ↑/↓, ↩ to jump, ⎋ to close — also in the menu
+bar item as *Active sessions…*. A **Copilot CLI** activity monitor feeds it
+alongside the existing ones.
+
+### ▶ Nx launcher
+
+For every [Nx](https://nx.dev) workspace a Wave terminal is in, the card
+lists its projects — apps first — with their targets as buttons (`serve`,
+`test`, `component-test`, `build`…, from `nx graph`, so plugin-inferred
+targets are there too). A button runs `npx nx run project:target` (or the
+workspace's `pnpm`/`yarn`) in a new Wave block beside your terminal, and
+brings that tab up.
+
+### 🔊 Sound
+
+- **Output device** and **volume**, switched from the card; follows Control
+  Centre and the volume keys.
+- **Spotify** and **YouTube in Chrome**: title, play/pause, previous/next.
+  YouTube needs Chrome's *View › Developer › Allow JavaScript from Apple
+  Events*.
+- **Microphone** mute for every app at once. During a call the cell turns
+  into a mic indicator.
+- **Music pauses during calls** — whenever an app (Teams, Zoom, Meet) has the
+  microphone — and resumes afterwards, only what it paused.
+- **Per-app volume**: Teams quieter than the music, or anything else. Built on
+  a Core Audio process tap (macOS 14.2+); at 100 % nothing is intercepted.
+  Needs **System Audio Recording** permission.
+
+Every addition has its own switch in Settings → *Sessions in windows*.
+
+### Distribution
+
+Signed with this fork's own Developer ID (team `6369QW3U52`) and notarized.
+Automatic updates are **off**: the upstream feed would replace the fork with
+the official release, and every addition with it.
+
 Hover a ring for its limit windows and when they reset. Claude's ring shows the
 same **current session** window Claude Code's own `/usage` leads with, so the
 two never disagree.
@@ -23,16 +101,17 @@ two never disagree.
 
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/Codenotch.dmg)
 
-That button is the disk image itself, not the page it sits on — the asset is
-named `Codenotch.dmg` in every release, so `releases/latest/download/` always
-resolves to the newest one and the link never needs updating. Signed,
-notarized, and updating itself from then on. Take this one unless you have a
-reason not to; the [release page](../../releases/latest) has the notes.
+That button is this fork's disk image — signed and notarized, so it opens
+with a double-click on a Mac with neither Xcode nor an Apple account. It does
+**not** update itself (see [Updates](#updates)); the
+[release page](../../releases/latest) has the notes. For the official app,
+take [upstream's release](https://github.com/vinzdg/codenotch/releases/latest).
 
-To try unreleased `main` without an Xcode install, the [preview
-build](../../releases/tag/preview) is rebuilt from every commit, and the
-Package workflow keeps a per-commit disk image on each of its
-[runs](../../actions/workflows/package.yml). Neither is notarized — they are
+Upstream also publishes a [preview
+build](https://github.com/vinzdg/codenotch/releases/tag/preview) of its
+unreleased `main`, and its Package workflow keeps a per-commit disk image on
+each of its [runs](https://github.com/vinzdg/codenotch/actions/workflows/package.yml).
+Neither contains this fork's additions, and neither is notarized — they are
 ad-hoc signed, because the Developer ID certificate exists on one machine — so
 macOS quarantines the download. Clear the flag once, after dragging the app to
 Applications:
@@ -48,7 +127,9 @@ instead, see [Building](#building).
 
 ## Windows
 
-[![Download for Windows](docs/design/download-windows.svg)](../../releases/latest/download/Codenotch-Setup.exe)
+[![Download for Windows](docs/design/download-windows.svg)](https://github.com/vinzdg/codenotch/releases/latest/download/Codenotch-Setup.exe)
+
+Upstream's, unchanged by this fork — the additions above are macOS only.
 
 A Windows port — Rust/Tauri 2, same design and providers — lives in [`windows/`](windows/README.md).
 The button is the installer itself, named `Codenotch-Setup.exe` in every release for the same
@@ -206,6 +287,11 @@ dictionary at all. So the app is raised for everybody and the tooltip names the
 session, which leaves the last hop one keystroke rather than working for two
 terminals and silently doing nothing in a third.
 
+*In this fork*, Wave is the exception: its tab and block are selected too —
+see [Going to the right Wave tab](#going-to-the-right-wave-tab) — and a
+session waiting on you also lands in the [to-do list](#-to-do-sessions-waiting-on-you)
+instead of a five-second peek.
+
 Both halves switch off separately in Settings, because they fail differently:
 the peek is no use behind a full-screen window, and the sound is no use in a
 meeting. Each of the two events — finished, and waiting on you — picks its own
@@ -280,10 +366,14 @@ the icon comes back. Its menu has the full readings either way.
 
 ## Updates
 
-Codenotch updates itself. [Sparkle](https://sparkle-project.org) checks daily
-and installs in the background without prompting; Settings says so and can
-switch it off. Every update is EdDSA-signed, so nothing installs that wasn't
-built and signed by the maintainer.
+Upstream Codenotch updates itself: [Sparkle](https://sparkle-project.org)
+checks daily and installs in the background, and every update is EdDSA-signed
+by the maintainer.
+
+**This fork does not.** Its automatic checks are off and its feed points at
+this repository, which publishes none: pointed at upstream's, the first check
+replaced the fork with the official release. A new version is a new download
+from the [releases](../../releases).
 
 ## Building
 
@@ -314,6 +404,29 @@ keychain (no Apple Developer account needed) and re-signs the app. Grant the
 keychain prompt once more after signing; it will not ask again.
 
 Run with `CODENOTCH_DEMO=1` to see fixed sample data instead of live readings.
+
+### Releasing this fork
+
+Signed with the fork's team (`TEAM_ID` in the Makefile, `DEVELOPMENT_TEAM` in
+`project.yml`). Once, store the notary credentials — in a real terminal, since
+the password is typed at a prompt:
+
+```sh
+xcrun notarytool store-credentials UsageNotch --apple-id <apple-id> --team-id 6369QW3U52
+```
+
+Then, after bumping `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in
+`project.yml`:
+
+```sh
+make dmg                                                   # archive, export Developer ID, sign the dmg
+xcrun notarytool submit build/release/Codenotch.dmg --keychain-profile UsageNotch --wait
+xcrun stapler staple build/release/Codenotch.dmg
+gh release create hub-N build/release/Codenotch.dmg --target hub
+```
+
+Not `make release`: it also writes a Sparkle appcast for upstream's download
+host.
 
 ## Architecture
 
