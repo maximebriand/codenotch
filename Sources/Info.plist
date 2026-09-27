@@ -43,11 +43,11 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Codenotch answers your phone on this network so it can show your usage.</string>
 	<key>SUAutomaticallyUpdate</key>
-	<true/>
+	<false/>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
+	<false/>
 	<key>SUFeedURL</key>
-	<string>https://hivinz.com/appcast.xml</string>
+	<string>https://github.com/maximebriand/codenotch/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>rmUfT5r49nR+3HdkbR5/YYLghfnAi6L49eOk3sIegSk=</string>
 	<key>SUScheduledCheckInterval</key>

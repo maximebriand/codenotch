@@ -121,12 +121,14 @@ clean:
 # One-time setup, which you have to run yourself because it takes a password:
 #
 #   xcrun notarytool store-credentials UsageNotch \
-#       --apple-id <your-apple-id> --team-id 6WFPL8B9FB --password <app-specific-password>
+#       --apple-id <your-apple-id> --team-id $(TEAM_ID) --password <app-specific-password>
 #
 # The app-specific password comes from appleid.apple.com → Sign-In and Security
 # → App-Specific Passwords. Not your Apple ID password.
 
 RELEASE_DIR := build/release
+# The team that signs and notarizes: this fork's, matching project.yml.
+TEAM_ID     ?= 6369QW3U52
 APP_NAME    := Codenotch
 # The label of the stored notarytool credential in the login keychain, not
 # anything to do with the app's name — it was created before the rename and
@@ -154,7 +156,7 @@ archive: gen
 		'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
 		'<plist version="1.0"><dict>' \
 		'<key>method</key><string>developer-id</string>' \
-		'<key>teamID</key><string>6WFPL8B9FB</string>' \
+		'<key>teamID</key><string>$(TEAM_ID)</string>' \
 		'<key>signingStyle</key><string>manual</string>' \
 		'<key>signingCertificate</key><string>Developer ID Application</string>' \
 		'</dict></plist>' > $(RELEASE_DIR)/ExportOptions.plist

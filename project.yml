@@ -23,7 +23,8 @@ settings:
     # and the prompt would come back after every `make run`.
     CODE_SIGN_IDENTITY: "Developer ID Application"
     CODE_SIGN_STYLE: Manual
-    DEVELOPMENT_TEAM: 6WFPL8B9FB
+    # This fork's team (Briand Maxime), not upstream's 6WFPL8B9FB.
+    DEVELOPMENT_TEAM: 6369QW3U52
     CODE_SIGNING_REQUIRED: "YES"
     CODE_SIGNING_ALLOWED: "YES"
     # Required by notarization. Worth knowing what it does *not* break here:
@@ -100,7 +101,11 @@ targets:
         #
         # Must stay reachable for as long as any copy is installed: the feed is
         # the only route by which a shipped build can ever be replaced.
-        SUFeedURL: https://hivinz.com/appcast.xml
+        # This fork's feed, not upstream's: pointed at hivinz.com, the first
+        # automatic check replaced a fork build with the official release and
+        # every fork-only feature went with it. Nothing is published here yet,
+        # so a manual check simply finds no update.
+        SUFeedURL: https://github.com/maximebriand/codenotch/releases/latest/download/appcast.xml
         # The public half of the EdDSA key in the login keychain. Sparkle
         # refuses any update not signed by its private half, so a hijacked feed
         # or a swapped download cannot install code. Losing the private key
@@ -109,8 +114,9 @@ targets:
         # Set explicitly so Sparkle never asks on first launch. Left unset, it
         # shows a "check for updates automatically?" prompt, which is exactly
         # the permission this is meant to avoid.
-        SUEnableAutomaticChecks: true
-        SUAutomaticallyUpdate: true
+        # Off in this fork until it publishes signed updates of its own.
+        SUEnableAutomaticChecks: false
+        SUAutomaticallyUpdate: false
         SUScheduledCheckInterval: 86400
     settings:
       base:
