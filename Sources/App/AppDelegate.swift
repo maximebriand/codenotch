@@ -28,6 +28,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Turns the monitors' running commentary into the one event worth
     /// interrupting for: an agent that has just stopped working.
     private var completions = SessionCompletionWatcher()
+    /// The panel that lists every running session at once. Held for the life of
+    /// the app because it owns the global shortcut that opens it.
+    private var switcher: SessionFleetWindowController?
+    /// Waits taken off the to-do list — gone to, or cleared — so the same one
+    /// is not listed again. Keyed by wait, not by session: see `SessionPrompt.id`.
+    private var answeredPrompts: Set<String> = []
+    /// The waits already on the list, so only a new arrival opens the notch —
+    /// not a list that is merely unchanged, nor one that has just got shorter.
+    private var listedPromptIDs: Set<String> = []
+    /// Turns seen ending while Codenotch watched, keyed like `SessionPrompt.id`
+    /// — the finished sessions the card may offer. See `SessionPrompt.current`.
+    private var finishedTurns: Set<String> = []
+    /// The Nx workspaces behind the notch's ▶ cell.
+    private let nxLauncher = NxLauncher()
+    private var nxRefreshTimer: Timer?
+    /// The outputs behind the notch's sound cell.
+    private let audioOutputs = AudioOutputMonitor()
+    /// Spotify and YouTube, at the top of the sound card.
+    private let nowPlaying = NowPlayingMonitor()
+    /// Per-app levels — Teams apart from the music.
+    private let appVolumes = AppVolumeController()
 
     /// The unit bundle is hosted by this app, so `xcodebuild test` launches it
     /// for real. Without this guard every test run put a live request on the
@@ -371,6 +392,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fleet.onFocusSession = { pid in
                 Task { _ = await SessionFocus.focus(pid: pid) }
             }
+            fleet.onAnswerPrompt = { [weak self] prompt, go in
+                self?.answer(prompt, go: go)
+            }
+            fleet.onLaunch = { [weak self, weak fleet] entry, project, target in
+                self?.nxLauncher.launch(entry, project: project, target: target)
+                fleet?.foldAfterAnswer()
+            }
+            fleet.onLauncherOpened = { [weak self] in self?.nxLauncher.refresh() }
+            fleet.onSelectOutput = { [weak self] id in self?.audioOutputs.select(id) }
+            fleet.onSetVolume = { [weak self] volume in self?.audioOutputs.setVolume(volume) }
+            fleet.onMuteMicrophone = { [weak self] muted in self?.audioOutputs.setMicrophoneMuted(muted) }
+            fleet.onMediaCommand = { [weak self] player, command in
+                self?.nowPlaying.send(command, to: player)
+            }
+            fleet.onSoundOpened = { [weak self] in
+                self?.nowPlaying.refresh()
+                self?.appVolumes.reload()
+            }
+            fleet.onSetAppVolume = { [weak self] bundleID, level in
+                self?.appVolumes.setLevel(level, for: bundleID)
+            }
             self.settings = settings
 
             // What changed, once per version — including on a fresh install,
@@ -400,6 +442,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusItem = statusItem
             statusItem.onRefreshProvider = { [weak store] id in store?.refresh(providerID: id) }
             statusItem.onRefreshAll = { [weak store] in store?.refreshNow() }
+            // Resolved when the menu item is chosen, not now: the switcher is
+            // built further down, once the notch fleet whose sessions it lists
+            // exists.
+            statusItem.onOpenSwitcher = { [weak self] in self?.switcher?.show() }
             // The menu's tick writes to the same preference Settings writes to,
             // and reads nothing back of its own: the sink below carries the new
             // value to the item, and Settings — a published property away —
@@ -713,6 +759,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "grok": GrokActivityMonitor(),
             "gemini-api": GeminiAPIActivityMonitor(),
             "kimi": KimiActivityMonitor(),
+            "copilot": CopilotActivityMonitor(),
         ]
         for profile in antigravityProfiles {
             monitors[profile.id] = AntigravityActivityMonitor(profile: profile)
@@ -769,8 +816,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let fleet else { return }
             fleet.setSessions(providerID: id, sessions: sessions)
             self?.announceCompletions(sessions: fleet.sessions)
+            self?.offerSessionPrompt(sessions: fleet.sessions)
         }
         self.activityCoordinator = activity
+
+        // Nine terminal windows and nothing to say which of them is waiting on
+        // you is what this opens onto; the notch answers "is it still working",
+        // which is a different question. See `SessionFleet`.
+        let switcher = SessionFleetWindowController(
+            sessions: { [weak fleet] in fleet?.sessions ?? [:] }
+        )
+        self.switcher = switcher
+        preferences.$sessionSwitcherHotKey
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak switcher] wanted in
+                guard let switcher else { return }
+                guard wanted else { return switcher.unregisterHotKey() }
+                // A combination another application already holds cannot be
+                // taken from it; saying so beats a key that does nothing.
+                if !switcher.registerHotKey() {
+                    Log.usage.notice("session switcher shortcut is already taken")
+                }
+            }
+            .store(in: &cancellables)
+
+        // The launcher finds its workspaces from the open terminals, so it
+        // looks again now and then: a terminal opened in a new workspace
+        // should bring ▶ up without anyone having to hover a cell that is
+        // not there yet. The scan is a few milliseconds; graphs are cached.
+        nxLauncher.onChange = { [weak fleet, weak preferences] entries in
+            fleet?.setLauncher(entries, enabled: preferences?.showsNxLauncher ?? false)
+        }
+        var wasInCall = false
+        audioOutputs.onChange = { [weak self, weak fleet, weak preferences] state in
+            fleet?.setSound(state, enabled: preferences?.showsSoundCell ?? false)
+            // A call is the microphone in use. Only the edges matter: the
+            // music is paused once as the call starts and resumed once as it
+            // ends, whatever the volume does in between.
+            let inCall = state.microphone?.isInUse ?? false
+            guard inCall != wasInCall else { return }
+            wasInCall = inCall
+            guard let self, preferences?.pausesMusicDuringCalls == true else { return }
+            if inCall { self.nowPlaying.pauseForCall() } else { self.nowPlaying.resumeAfterCall() }
+        }
+        audioOutputs.start()
+        nowPlaying.onChange = { [weak fleet] players in fleet?.setNowPlaying(players) }
+        nowPlaying.start()
+        appVolumes.onChange = { [weak fleet] apps, levels in
+            fleet?.setAppVolumes(AppVolumeRow.rows(apps: apps, levels: levels))
+        }
+        appVolumes.start()
+        preferences.$showsSoundCell
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak fleet] enabled in
+                guard let self else { return }
+                fleet?.setSound(self.audioOutputs.state, enabled: enabled)
+            }
+            .store(in: &cancellables)
+
+        preferences.$showsNxLauncher
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak fleet] enabled in
+                guard let self else { return }
+                fleet?.setLauncher(self.nxLauncher.entries, enabled: enabled)
+                if enabled { self.nxLauncher.refresh() }
+            }
+            .store(in: &cancellables)
+        let nxTimer = Timer(timeInterval: 120, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.preferences?.showsNxLauncher == true else { return }
+                self.nxLauncher.refresh()
+            }
+        }
+        RunLoop.main.add(nxTimer, forMode: .common)
+        nxRefreshTimer = nxTimer
+
+        preferences.$showsSessionPrompts
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak fleet] _ in
+                guard let fleet else { return }
+                self?.offerSessionPrompt(sessions: fleet.sessions)
+            }
+            .store(in: &cancellables)
+
         let monitorIDs = Set(monitors.keys)
         activity.setEnabled(Set(monitorIDs.filter { preferences.isConnected($0) }))
         preferences.$connectedProviders
@@ -851,6 +984,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func announceCompletions(sessions: [String: [AgentSession]]) {
         let events = completions.absorb(sessions)
+        for event in events where event.reason == .finished && event.session.processID != nil {
+            finishedTurns.insert(SessionPrompt.key(providerID: event.providerID, session: event.session))
+        }
         guard let event = events.first, let preferences, let fleet = notchFleet else { return }
         Log.usage.info("session \(event.session.name, privacy: .public) \(String(describing: event.reason), privacy: .public)")
 
@@ -859,9 +995,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               ? preferences.sessionBlockedSoundName
                               : preferences.sessionEndSoundName)
         }
+        if event.reason == .blocked, let pid = event.session.processID {
+            markBlocked(pid: pid, preferences: preferences)
+        }
+        // A session with a window is the to-do list's to announce: it opens
+        // the notch itself, and the plain peek's click-anywhere-to-go would
+        // take the list's rows away from under the pointer.
+        if preferences.showsSessionPrompts, event.session.processID != nil { return }
         guard preferences.announceSessionEnd else { return }
         fleet.peek(for: preferences.peekDuration.seconds,
                    focusing: event.session.processID)
+    }
+
+    /// Keep the notch's to-do list in step with the sessions.
+    ///
+    /// Run on every reading rather than on the watcher's events, because a row
+    /// has to *leave* as surely as it arrives — a question answered in the
+    /// terminal itself ends the wait, and a row left behind would be asking
+    /// about something already settled.
+    @MainActor
+    private func offerSessionPrompt(sessions: [String: [AgentSession]], announcing: Bool = true) {
+        guard let preferences, let fleet = notchFleet else { return }
+        answeredPrompts = SessionPrompt.pruned(answeredPrompts, sessions: sessions)
+        finishedTurns = SessionPrompt.pruned(finishedTurns, sessions: sessions)
+        let enabled = preferences.showsSessionPrompts
+        let items = enabled
+            ? SessionPrompt.open(sessions: sessions, finished: finishedTurns,
+                                 dismissed: answeredPrompts)
+            : []
+        let ids = Set(items.map(\.id))
+        let arrived = !ids.subtracting(listedPromptIDs).isEmpty
+        listedPromptIDs = ids
+        fleet.setInbox(items, enabled: enabled, announce: announcing && arrived,
+                       duration: max(preferences.peekDuration.seconds, 6))
+    }
+
+    /// A row's answer. Going there takes you to the session and closes the
+    /// notch behind you; clearing just takes the row off the list.
+    @MainActor
+    private func answer(_ prompt: SessionPrompt, go: Bool) {
+        answeredPrompts.insert(prompt.id)
+        if go, let pid = prompt.session.processID {
+            notchFleet?.foldAfterAnswer()
+            Task { _ = await SessionFocus.focus(pid: pid) }
+        }
+        offerSessionPrompt(sessions: notchFleet?.sessions ?? [:], announcing: false)
+    }
+
+    /// A session that has stopped to ask you something, made findable.
+    ///
+    /// Two halves, kept apart on purpose. The badge is the quiet one: Wave
+    /// lights the tab in its own tab bar, nothing moves, and Wave clears the
+    /// mark itself when the process exits — including across a restart of
+    /// Codenotch, which would otherwise have no record of one to clean up.
+    /// Raising the window is the loud one, and it stays off unless it was asked
+    /// for: it is the only thing in the app that takes focus away from whatever
+    /// you were typing into.
+    ///
+    /// Only on `.blocked`. A window raised at the end of every turn would be a
+    /// window raised all day.
+    @MainActor
+    private func markBlocked(pid: pid_t, preferences: Preferences) {
+        let badge = preferences.marksBlockedWaveBlock
+        let raise = preferences.raisesBlockedSession
+        guard badge || raise else { return }
+        // Off the main actor: both halves read the process tree, and the badge
+        // spawns `wsh`.
+        Task.detached(priority: .userInitiated) {
+            if badge, let block = WaveTerminal.block(of: pid) {
+                WaveTerminal.badge(block, icon: WaveTerminal.blockedBadgeIcon,
+                                   color: WaveTerminal.blockedBadgeColor,
+                                   clearingWhenPIDExits: pid)
+            }
+            if raise { _ = await SessionFocus.focus(pid: pid) }
+        }
     }
 
     /// Open the notch and show a usage reset notification modal when a limit resets.

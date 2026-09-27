@@ -336,6 +336,60 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(announceSessionEnd, forKey: Keys.announceSessionEnd) }
     }
 
+    /// Register ⌥⌘S for the session switcher.
+    ///
+    /// On by default, and a preference rather than a constant because a hot key
+    /// is claimed system-wide by whoever registers it first: somebody whose
+    /// editor already owns this combination needs a way to give it back.
+    @Published var sessionSwitcherHotKey: Bool {
+        didSet { defaults.set(sessionSwitcherHotKey, forKey: Keys.sessionSwitcherHotKey) }
+    }
+
+    /// Bring a session's window forward by itself when it blocks on a question.
+    ///
+    /// Off by default, unlike everything else here, because it is the only
+    /// setting in the app that takes focus away from what you are doing. It
+    /// fires on `waiting` alone — a window raised at the end of every turn
+    /// would be a window raised all day.
+    @Published var raisesBlockedSession: Bool {
+        didSet { defaults.set(raisesBlockedSession, forKey: Keys.raisesBlockedSession) }
+    }
+
+    /// Offer a session that stops to ask you something in the notch — what it
+    /// is about, what it is asking, and a way to go there or leave it.
+    ///
+    /// On by default: nothing moves and nothing takes focus. It opens the notch
+    /// once, and the card waits there until it is answered.
+    @Published var showsSessionPrompts: Bool {
+        didSet { defaults.set(showsSessionPrompts, forKey: Keys.showsSessionPrompts) }
+    }
+
+    /// Show the Nx launcher — ▶ at the end of the notch — whenever a Wave
+    /// terminal is open in an Nx workspace.
+    @Published var showsNxLauncher: Bool {
+        didSet { defaults.set(showsNxLauncher, forKey: Keys.showsNxLauncher) }
+    }
+
+    /// Show the sound cell — the output device and its volume — in the notch.
+    @Published var showsSoundCell: Bool {
+        didSet { defaults.set(showsSoundCell, forKey: Keys.showsSoundCell) }
+    }
+
+    /// Pause Spotify and YouTube while the microphone is in use — in a call —
+    /// and resume them afterwards.
+    @Published var pausesMusicDuringCalls: Bool {
+        didSet { defaults.set(pausesMusicDuringCalls, forKey: Keys.pausesMusicDuringCalls) }
+    }
+
+    /// Badge the Wave block a blocked session runs in.
+    ///
+    /// On by default: it is the quiet half of the same answer — the tab lights
+    /// up in Wave's own tab bar, nothing moves, and the badge clears itself when
+    /// the session exits. Does nothing for a terminal that is not Wave.
+    @Published var marksBlockedWaveBlock: Bool {
+        didSet { defaults.set(marksBlockedWaveBlock, forKey: Keys.marksBlockedWaveBlock) }
+    }
+
     /// How long that peek lasts.
     @Published var peekDuration: PeekDuration {
         didSet { defaults.set(peekDuration.rawValue, forKey: Keys.peekDuration) }
@@ -490,6 +544,13 @@ final class Preferences: ObservableObject {
         static let lastSeenVersion = "lastSeenVersion"
         static let order = "providerOrder"
         static let announceSessionEnd = "announceSessionEnd"
+        static let sessionSwitcherHotKey = "sessionSwitcherHotKey"
+        static let raisesBlockedSession = "raisesBlockedSession"
+        static let showsSessionPrompts = "showsSessionPrompts"
+        static let showsNxLauncher = "showsNxLauncher"
+        static let showsSoundCell = "showsSoundCell"
+        static let pausesMusicDuringCalls = "pausesMusicDuringCalls"
+        static let marksBlockedWaveBlock = "marksBlockedWaveBlock"
         static let sessionEndSound = "sessionEndSound"
         static let peekDuration = "peekDuration"
         static let sessionEndSoundName = "sessionEndSoundName"
@@ -824,6 +885,13 @@ final class Preferences: ObservableObject {
         // Both default to on, so `bool(forKey:)` — which answers false for a
         // key that was never written — cannot stand in for the default.
         self.announceSessionEnd = defaults.object(forKey: Keys.announceSessionEnd) as? Bool ?? true
+        self.sessionSwitcherHotKey = defaults.object(forKey: Keys.sessionSwitcherHotKey) as? Bool ?? true
+        self.raisesBlockedSession = defaults.object(forKey: Keys.raisesBlockedSession) as? Bool ?? false
+        self.showsSessionPrompts = defaults.object(forKey: Keys.showsSessionPrompts) as? Bool ?? true
+        self.showsNxLauncher = defaults.object(forKey: Keys.showsNxLauncher) as? Bool ?? true
+        self.showsSoundCell = defaults.object(forKey: Keys.showsSoundCell) as? Bool ?? true
+        self.pausesMusicDuringCalls = defaults.object(forKey: Keys.pausesMusicDuringCalls) as? Bool ?? true
+        self.marksBlockedWaveBlock = defaults.object(forKey: Keys.marksBlockedWaveBlock) as? Bool ?? true
         self.sessionEndSound = defaults.object(forKey: Keys.sessionEndSound) as? Bool ?? true
         self.peekDuration = defaults.string(forKey: Keys.peekDuration)
             .flatMap(PeekDuration.init(rawValue:)) ?? .standard

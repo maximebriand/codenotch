@@ -144,6 +144,132 @@ enum ClaudeTranscript {
     }
 }
 
+// MARK: - What a waiting session is about
+
+extension ClaudeTranscript {
+    /// What a session that has stopped to ask something is about, and what it
+    /// is asking.
+    struct Prompt: Equatable {
+        /// The conversation's title: the one you gave it, or else the one
+        /// Claude Code generated.
+        let title: String?
+        /// The tool call the session is holding for you, in words.
+        let ask: String?
+        /// The start of the last thing it said to you.
+        var reply: String? = nil
+    }
+
+    /// Read from the tail, forward, so the last word on each wins.
+    ///
+    /// The transcript cannot say *that* a session is waiting — see `Turn` — but
+    /// once the registry has said so, it says *what for*: the tool call written
+    /// last and not yet answered by a result is the one on screen. Only asked
+    /// of a session the registry already reports as waiting, so a call that
+    /// is merely taking its time is never described as a question.
+    ///
+    /// Titles are rewritten as the conversation moves on, dozens of times over
+    /// a long session, so the tail almost always holds a recent one.
+    static func prompt(inTail data: Data) -> Prompt {
+        var custom: String?
+        var generated: String?
+        var calls: [(id: String, name: String, input: [String: Any])] = []
+        var answered: Set<String> = []
+        var reply: String?
+
+        for line in data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: true) {
+            guard let json = (try? JSONSerialization.jsonObject(with: Data(line)))
+                    as? [String: Any] else { continue }
+            switch json["type"] as? String {
+            case "custom-title":
+                custom = nonEmpty(json["customTitle"] as? String) ?? custom
+            case "ai-title":
+                generated = nonEmpty(json["aiTitle"] as? String) ?? generated
+            case "assistant":
+                // A subagent's permission prompt is shown in its parent's
+                // terminal like any other, so sidechains are read here — unlike
+                // `turn(inTail:)`, which is about the parent's turn alone.
+                // The last words are the parent's: a subagent's text is its
+                // report to the parent, never addressed to you.
+                if json["isSidechain"] as? Bool != true {
+                    for block in blocks(of: json) where block["type"] as? String == "text" {
+                        reply = excerpt(block["text"] as? String) ?? reply
+                    }
+                }
+                for block in blocks(of: json) where block["type"] as? String == "tool_use" {
+                    guard let id = block["id"] as? String,
+                          let name = block["name"] as? String else { continue }
+                    calls.append((id, name, block["input"] as? [String: Any] ?? [:]))
+                }
+            case "user":
+                for block in blocks(of: json) where block["type"] as? String == "tool_result" {
+                    if let id = block["tool_use_id"] as? String { answered.insert(id) }
+                }
+            default:
+                continue
+            }
+        }
+
+        let pending = calls.last { !answered.contains($0.id) }
+        return Prompt(title: custom ?? generated,
+                      ask: pending.map { describe(tool: $0.name, input: $0.input) },
+                      reply: reply)
+    }
+
+    /// A reply cut to what fits a few lines of a card: whitespace and markdown
+    /// emphasis flattened, the rest left to the card's own truncation.
+    static func excerpt(_ text: String?, limit: Int = 280) -> String? {
+        guard let text = nonEmpty(text) else { return nil }
+        let flat = text
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "`", with: "")
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return flat.count > limit ? String(flat.prefix(limit)) + "…" : flat
+    }
+
+    /// One line a person can decide on without switching windows.
+    static func describe(tool: String, input: [String: Any]) -> String {
+        let text = { (key: String) in nonEmpty(input[key] as? String) }
+        switch tool {
+        case "AskUserQuestion":
+            // The first question is the one on screen; the rest follow it.
+            let questions = input["questions"] as? [[String: Any]]
+            if let question = questions?.first.flatMap({ nonEmpty($0["question"] as? String) }) {
+                return question
+            }
+            return L10n.t("Has a question for you")
+        case "ExitPlanMode":
+            return L10n.t("Wants you to approve its plan")
+        case "Bash":
+            if let command = text("description") ?? text("command") {
+                return L10n.t("Run: \(command)")
+            }
+        case "Edit", "MultiEdit", "Write", "NotebookEdit":
+            if let path = text("file_path") ?? text("notebook_path") {
+                return L10n.t("Edit \((path as NSString).lastPathComponent)")
+            }
+        case "WebFetch":
+            if let url = text("url") { return L10n.t("Fetch \(url)") }
+        default:
+            break
+        }
+        // An MCP tool's name is `mcp__server__tool`; the tool is the readable part.
+        let readable = tool.components(separatedBy: "__").last ?? tool
+        return L10n.t("Use \(readable)")
+    }
+
+    private static func blocks(of json: [String: Any]) -> [[String: Any]] {
+        ((json["message"] as? [String: Any])?["content"] as? [Any])?
+            .compactMap { $0 as? [String: Any] } ?? []
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return nil }
+        return text
+    }
+}
+
 /// Reads transcripts on a timer, and remembers enough not to read them twice.
 ///
 /// One instance per monitor. A tick that finds a transcript untouched since the
@@ -207,6 +333,28 @@ final class ClaudeTranscriptReader {
         entered[sessionID] = (turn, modified)
         return (turn, modified)
     }
+
+    /// What a waiting session is about, read again only when the file has grown.
+    ///
+    /// Asked only of sessions the registry reports as waiting, which are few
+    /// and hold still while they wait — so this is one tail read per question
+    /// asked, not one per tick.
+    func prompt(sessionID: String, cwd: String) -> ClaudeTranscript.Prompt? {
+        guard let url = path(sessionID: sessionID, cwd: cwd),
+              let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              let modified = attributes[.modificationDate] as? Date
+        else { return nil }
+        let size = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+        if let cached = prompts[sessionID], cached.modified == modified, cached.size == size {
+            return cached.prompt
+        }
+        guard let tail = ClaudeTranscript.tail(of: url) else { return nil }
+        let prompt = ClaudeTranscript.prompt(inTail: tail)
+        prompts[sessionID] = (modified, size, prompt)
+        return prompt
+    }
+
+    private var prompts: [String: (modified: Date, size: UInt64, prompt: ClaudeTranscript.Prompt)] = [:]
 
     private func path(sessionID: String, cwd: String) -> URL? {
         if let known = paths[sessionID] { return known }

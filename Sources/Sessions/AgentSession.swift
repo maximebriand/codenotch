@@ -33,6 +33,17 @@ struct AgentSession: Identifiable, Equatable {
     /// rather than from a process, and a nil here costs nothing but the ability
     /// to jump to that session.
     let processID: pid_t?
+    /// What the session is about, in the tool's own words — Claude Code's
+    /// generated title, say — when it has one to give.
+    ///
+    /// Separate from `name` because `name` is what tells one row from the next
+    /// and has to be there for every session, while a topic is only read where
+    /// the question is "which conversation is this": the card that says a
+    /// session is waiting on you.
+    let topic: String?
+    /// The start of the last thing it said, once a turn has ended — what a
+    /// finished session is handing back to you.
+    let lastReply: String?
 
     /// Written out rather than synthesised so `processID` can default to nil:
     /// four of the five monitors have no pid to give, and a memberwise
@@ -44,7 +55,9 @@ struct AgentSession: Identifiable, Equatable {
         state: State,
         waitingFor: String?,
         since: Date,
-        processID: pid_t? = nil
+        processID: pid_t? = nil,
+        topic: String? = nil,
+        lastReply: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -53,5 +66,7 @@ struct AgentSession: Identifiable, Equatable {
         self.waitingFor = waitingFor
         self.since = since
         self.processID = processID
+        self.topic = topic
+        self.lastReply = lastReply
     }
 }

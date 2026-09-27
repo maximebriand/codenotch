@@ -36,6 +36,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Codenotch shows and controls what Spotify and YouTube are playing, and finds the terminal tab a session runs in.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Codenotch sets one app's volume apart from the others — Teams quieter than your music — by playing that app's sound back at the level you choose.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Codenotch answers your phone on this network so it can show your usage.</string>
 	<key>SUAutomaticallyUpdate</key>

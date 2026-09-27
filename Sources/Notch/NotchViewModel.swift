@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import CoreAudio
 
 @MainActor
 final class NotchViewModel: ObservableObject {
@@ -84,6 +85,91 @@ final class NotchViewModel: ObservableObject {
 
     func resetAlertIndex(for event: UsageResetEvent) -> Int? {
         snapshots.firstIndex { $0.id == event.providerID }
+    }
+
+    /// Whether the stack ends in the bell — the to-do cell. A cell like the
+    /// rings, so it changes the notch's length when it comes or goes.
+    @Published var showsInbox = false
+    /// What is waiting on you, newest first.
+    @Published var inbox: [SessionPrompt] = []
+    /// The to-do card is up because something just arrived, not because the
+    /// pointer is on the bell. Lasts as long as the peek that announced it.
+    @Published var inboxAnnounced = false
+    /// A row's two answers, wired by the fleet: go there (true), or clear it.
+    var onAnswerPrompt: ((SessionPrompt, _ go: Bool) -> Void)?
+
+    /// Whether the stack ends in the ▶ cell — the Nx launcher.
+    @Published var showsLauncher = false
+    /// The workspaces the launcher offers, the one on screen first.
+    @Published var launcher: [NxLauncher.Entry] = []
+    /// A target chosen from the launcher card, wired by the fleet.
+    var onLaunch: ((NxLauncher.Entry, _ project: String, _ target: String) -> Void)?
+    /// The launcher card is opening: a moment to look at the terminals again.
+    var onLauncherOpened: (() -> Void)?
+
+    /// Whether the stack ends in the sound cell — the output device and its
+    /// volume.
+    @Published var showsSound = false
+    /// The output devices, and which one is playing.
+    @Published var sound: AudioOutputs.State = .empty
+    /// A device chosen, or a volume set, from the sound card.
+    var onSelectOutput: ((AudioDeviceID) -> Void)?
+    var onSetVolume: ((Float) -> Void)?
+    var onMuteMicrophone: ((Bool) -> Void)?
+    /// Per-app levels, at the bottom of the sound card.
+    @Published var appVolumes: [AppVolumeRow] = []
+    var onSetAppVolume: ((String, Float) -> Void)?
+    /// What Spotify and YouTube are playing, shown at the top of the sound card.
+    @Published var nowPlaying: [NowPlaying] = []
+    var onMediaCommand: ((NowPlaying, NowPlaying.Command) -> Void)?
+    /// The sound card is opening: a moment to ask the players again.
+    var onSoundOpened: (() -> Void)?
+
+    /// The cells after the rings, in stack order. Not providers: each is a
+    /// way into something the notch does besides reading usage.
+    enum StackCell: Equatable { case inbox, launcher, sound }
+
+    var stackCells: [StackCell] {
+        var cells: [StackCell] = []
+        if showsInbox { cells.append(.inbox) }
+        if showsLauncher { cells.append(.launcher) }
+        if showsSound { cells.append(.sound) }
+        return cells
+    }
+
+    /// Where a stack cell sits — after the rings, so every ring keeps the
+    /// index the rest of the notch knows it by.
+    func index(of cell: StackCell) -> Int? {
+        stackCells.firstIndex(of: cell).map { snapshots.count + $0 }
+    }
+
+    /// Every cell in the stack: the rings, then the bell, ▶ and the speaker.
+    var cellCount: Int { snapshots.count + stackCells.count }
+    var inboxIndex: Int? { index(of: .inbox) }
+    var launcherIndex: Int? { index(of: .launcher) }
+    var soundIndex: Int? { index(of: .sound) }
+
+    /// Whether the sound card is on screen: the speaker hovered, the notch
+    /// open, nothing louder in front of it.
+    var showsSoundCard: Bool {
+        guard showsSound, isExpanded, activeResetAlert == nil, !inboxAnnounced,
+              let hoveredIndex else { return false }
+        return hoveredIndex == soundIndex
+    }
+
+    /// Whether the launcher card is on screen: ▶ hovered, the notch open, and
+    /// nothing louder in front of it.
+    var showsLauncherCard: Bool {
+        guard showsLauncher, isExpanded, activeResetAlert == nil, !inboxAnnounced,
+              let hoveredIndex else { return false }
+        return hoveredIndex == launcherIndex
+    }
+
+    /// Whether the to-do card is on screen: the notch open, no usage alert in
+    /// front of it, and either the bell hovered or an arrival being announced.
+    var showsInboxCard: Bool {
+        guard showsInbox, isExpanded, activeResetAlert == nil else { return false }
+        return inboxAnnounced || (hoveredIndex != nil && hoveredIndex == inboxIndex)
     }
 
     /// Whether the notch is open or folded away to its pill.
@@ -307,7 +393,7 @@ final class NotchViewModel: ObservableObject {
     /// notch appears not to have opened at all. So the floor is the notch plus
     /// a fillet's worth of opening at each side, and a corner's worth beyond
     /// that for the bar's own rounding to live in.
-    var endSpread: CGFloat { endSpread(cellCount: snapshots.count) }
+    var endSpread: CGFloat { endSpread(cellCount: cellCount) }
 
     func endSpread(cellCount: Int) -> CGFloat {
         guard let hardwareNotch else { return 0 }
@@ -487,7 +573,7 @@ final class NotchViewModel: ObservableObject {
     /// The straight part of the shape, flares excluded.
     var bodyLength: CGFloat {
         NotchLayout.bodyLength(
-            cellCount: snapshots.count, edge: edge, spacing: cellSpacing
+            cellCount: cellCount, edge: edge, spacing: cellSpacing
         ) + 2 * endSpread
     }
 
@@ -498,7 +584,7 @@ final class NotchViewModel: ObservableObject {
                               spacing: cellSpacing) + endSpread
     }
 
-    var cellSpacing: CGFloat { cellSpacing(cellCount: snapshots.count) }
+    var cellSpacing: CGFloat { cellSpacing(cellCount: cellCount) }
     var cellPitch: CGFloat { NotchLayout.cellAlong(for: edge) + cellSpacing }
 
     private func cellSpacing(cellCount: Int) -> CGFloat {
@@ -540,15 +626,15 @@ final class NotchViewModel: ObservableObject {
         return snapshots[hoveredIndex]
     }
 
-    var shapeLength: CGFloat { shapeLength(cellCount: snapshots.count) }
+    var shapeLength: CGFloat { shapeLength(cellCount: cellCount) }
 
-    var panelSize: CGSize { panelSize(cellCount: snapshots.count) }
+    var panelSize: CGSize { panelSize(cellCount: cellCount) }
 
     /// How stack space maps onto the panel right now.
     var placement: NotchPlacement { NotchPlacement(edge: edge, panelSize: panelSize) }
 
     /// Room at each end of the stack, for this edge.
-    var slack: CGFloat { slack(cellCount: snapshots.count) }
+    var slack: CGFloat { slack(cellCount: cellCount) }
 
     func slack(cellCount: Int) -> CGFloat {
         NotchLayout.slack(for: edge,
@@ -558,7 +644,7 @@ final class NotchViewModel: ObservableObject {
 
     /// How many sessions a tooltip may list here before it has to summarise
     /// the rest — as many as this screen has room for.
-    var sessionCap: Int { sessionCap(cellCount: snapshots.count) }
+    var sessionCap: Int { sessionCap(cellCount: cellCount) }
 
     private var hasTokenUsage: Bool {
         snapshots.contains { $0.tokenUsage != nil }
@@ -604,10 +690,16 @@ final class NotchViewModel: ObservableObject {
 
     func maxCardHeight(cellCount: Int) -> CGFloat {
         let cap = sessionCap(cellCount: cellCount)
-        return snapshots.isEmpty
+        let tallest = snapshots.isEmpty
             ? NotchLayout.maxCardHeight(sessionCap: cap, hasTokenUsage: hasTokenUsage, hasPlan: hasPlan,
                                         hasResetCredits: hasResetCredits)
             : contentCardHeight(sessionCap: cap)
+        // Room for the to-do card at its fullest, so the panel does not
+        // resize each time a session starts or stops waiting.
+        let inbox = showsInbox ? InboxCard.maxHeight : 0
+        let launcher = showsLauncher ? LauncherCard.cardHeight : 0
+        let sound = showsSound ? SoundCard.maxHeight : 0
+        return max(tallest, inbox, launcher, sound)
     }
 
     /// How tall the tallest card may be before the panel runs off the screen.

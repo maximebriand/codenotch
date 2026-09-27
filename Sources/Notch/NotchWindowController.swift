@@ -133,7 +133,7 @@ final class NotchWindowController {
                 let overTooltip = model.hoveredIndex
                     .flatMap(tooltipRect(index:))
                     .map { model.isExpanded && $0.contains(local) } ?? false
-                if liveRect.contains(local) || overTooltip {
+                if liveRect.contains(local) || overTooltip || isOverStackCard(local) {
                     return
                 }
             }
@@ -217,6 +217,45 @@ final class NotchWindowController {
             }
             .store(in: &cancellables)
 
+        model.$inbox
+            .combineLatest(model.$inboxAnnounced)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateInteractiveRects() }
+            }
+            .store(in: &cancellables)
+
+        // The bell and ▶ are cells: each lengthens the notch when it arrives.
+        model.$showsInbox
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.relocate() }
+            .store(in: &cancellables)
+        model.$showsLauncher
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.relocate() }
+            .store(in: &cancellables)
+        model.$launcher
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateInteractiveRects() }
+            }
+            .store(in: &cancellables)
+        model.$showsSound
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.relocate() }
+            .store(in: &cancellables)
+        // A device plugged in makes the sound card a row taller.
+        model.$sound
+            .combineLatest(model.$nowPlaying, model.$appVolumes)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateInteractiveRects() }
+            }
+            .store(in: &cancellables)
+
         // A model can gain speed rows without changing the cell count. Read
         // after Published's willSet so sizing sees the new card contents too.
         model.$snapshots
@@ -295,7 +334,7 @@ final class NotchWindowController {
     func relocate(cellCount: Int? = nil) {
         guard let screen = currentScreen() else { return }
         model.adopt(screen: screen)
-        let size = model.panelSize(cellCount: cellCount ?? model.snapshots.count)
+        let size = model.panelSize(cellCount: cellCount ?? model.cellCount)
         let frame = NotchGeometry.panelFrame(
             for: screen, panelSize: size, edge: model.edge,
             alongOffset: model.alongOffset, slack: model.slack,
@@ -525,9 +564,70 @@ final class NotchWindowController {
         )
     }
 
+    /// The to-do card, while it is on screen — the same terms `NotchRootView`
+    /// draws it on.
+    private var inboxCardRect: CGRect? {
+        guard model.showsInboxCard, let index = model.inboxIndex else { return nil }
+        let height = InboxCard.height(itemCount: model.inbox.count)
+        let cardAcross = model.edge.isVertical ? NotchLayout.cardWidth : height
+        let cardAlong = model.edge.isVertical ? height : NotchLayout.cardWidth
+        let centre = model.tooltipAlong(index: index, length: cardAlong)
+        return placement.rect(
+            along: centre - cardAlong / 2,
+            across: model.notchDrawnDepth,
+            length: cardAlong,
+            depth: NotchLayout.tailGap + NotchLayout.tailLength + cardAcross
+        )
+    }
+
+    /// The launcher card, while ▶ is hovered. Fixed height: it scrolls.
+    private var launcherCardRect: CGRect? {
+        guard model.showsLauncherCard, let index = model.launcherIndex else { return nil }
+        return stackCardRect(index: index, height: LauncherCard.cardHeight)
+    }
+
+    /// The sound card, while the speaker is hovered.
+    private var soundCardRect: CGRect? {
+        guard model.showsSoundCard, let index = model.soundIndex else { return nil }
+        return stackCardRect(index: index,
+                             height: SoundCard.height(deviceCount: model.sound.devices.count,
+                                                      playerCount: model.nowPlaying.count,
+                                                      appCount: model.appVolumes.count))
+    }
+
+    /// A card of `height` hanging off stack cell `index`, with its tail and the
+    /// gap the pointer crosses to reach it.
+    private func stackCardRect(index: Int, height: CGFloat) -> CGRect {
+        let cardAcross = model.edge.isVertical ? NotchLayout.cardWidth : height
+        let cardAlong = model.edge.isVertical ? height : NotchLayout.cardWidth
+        let centre = model.tooltipAlong(index: index, length: cardAlong)
+        return placement.rect(
+            along: centre - cardAlong / 2,
+            across: model.notchDrawnDepth,
+            length: cardAlong,
+            depth: NotchLayout.tailGap + NotchLayout.tailLength + cardAcross
+        )
+    }
+
+    /// Whether the pointer is on one of the stack cells' cards — to-do,
+    /// launcher, sound. Counts as being on the notch for every fold: a card you
+    /// are reaching into must not fold away under the pointer on its way there.
+    private func isOverStackCard(_ local: CGPoint) -> Bool {
+        [inboxCardRect, launcherCardRect, soundCardRect].contains { $0?.contains(local) == true }
+    }
+
     private func updateInteractiveRects() {
         var rects = [liveRect]
         if model.isExpanded, let event = model.activeResetAlert, let card = resetCardRect(event: event) {
+            rects.append(card)
+        }
+        if let card = inboxCardRect {
+            rects.append(card)
+        }
+        if let card = launcherCardRect {
+            rects.append(card)
+        }
+        if let card = soundCardRect {
             rects.append(card)
         }
         if model.isExpanded, let index = model.hoveredIndex, let card = tooltipRect(index: index) {
@@ -628,7 +728,7 @@ final class NotchWindowController {
         // handleActiveSpaceOrAppChange: left ungated, the hover fold out-votes
         // "Always show" under a full-screen app while the other path keeps
         // restoring it — the notch ends up folding on every poll.
-        setExpanded(liveRect.contains(local) || overTooltip,
+        setExpanded(liveRect.contains(local) || overTooltip || isOverStackCard(local),
                     ignoreAlwaysOn: foldsForFullScreen && isFullScreenActive())
 
         var target: Int?
@@ -638,6 +738,19 @@ final class NotchWindowController {
                   let card = tooltipRect(index: current),
                   card.contains(local) {
             target = current
+        } else if launcherCardRect?.contains(local) == true {
+            target = model.launcherIndex
+        } else if soundCardRect?.contains(local) == true {
+            target = model.soundIndex
+        } else if inboxCardRect?.contains(local) == true {
+            // On the to-do card — announced or opened from the bell — the
+            // bell is what is being looked at, and it holds the card open.
+            target = model.inboxIndex
+        }
+        // Reaching for a ring while an arrival is being announced hands the
+        // space back to that ring's own card.
+        if model.inboxAnnounced, let target, target != model.inboxIndex {
+            model.inboxAnnounced = false
         }
 
         let overHandle = model.isExpanded && isOverHandle(local)
@@ -660,6 +773,8 @@ final class NotchWindowController {
                 withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
                     model.hoveredIndex = target
                 }
+                if target == model.launcherIndex { model.onLauncherOpened?() }
+                if target == model.soundIndex { model.onSoundOpened?() }
             }
         } else if model.hoveredIndex != nil, clearHoverWork == nil {
             let work = DispatchWorkItem { [weak self] in
@@ -764,6 +879,11 @@ final class NotchWindowController {
             onOpenSettings?()
             return
         }
+        // The waiting-session card answers with its own buttons; a click
+        // anywhere else on it must not pin the notch or refetch a ring.
+        if isOverStackCard(local) {
+            return
+        }
         // A peek is a question — "this one just finished, do you want it?" —
         // and the click that follows is the answer. It outranks pinning and
         // refetching for as long as the offer stands, and for no longer.
@@ -801,6 +921,17 @@ final class NotchWindowController {
             // the ordinary hover behaviour, which a plain `setExpanded` leaves
             // intact.
             setExpanded(true)
+            return
+        }
+        if notchRect.contains(local),
+           let index = cellIndex(along: placement.along(of: local)),
+           index == model.inboxIndex || index == model.launcherIndex || index == model.soundIndex {
+            if index == model.launcherIndex { model.onLauncherOpened?() }
+            if index == model.soundIndex { model.onSoundOpened?() }
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+                model.hoveredIndex = index
+            }
+            updateInteractiveRects()
             return
         }
         if notchRect.contains(local),
@@ -1105,7 +1236,8 @@ final class NotchWindowController {
                 guard !stillHoldsOpen else { return }
                 // Left open if the peek did its job and the pointer is already
                 // there; the ordinary hover fold takes it from here.
-                guard !self.liveRect.contains(self.localCursor(in: panel.frame)) else { return }
+                let cursor = self.localCursor(in: panel.frame)
+                guard !self.liveRect.contains(cursor), !self.isOverStackCard(cursor) else { return }
                 withAnimation(NotchMotion.unfold) {
                     self.model.isExpanded = false
                     self.model.hoveredIndex = nil
@@ -1146,6 +1278,78 @@ final class NotchWindowController {
         return true
     }
 
+    /// Hand this notch the to-do list, and open it on the list when
+    /// something new has arrived.
+    ///
+    /// The announcement lasts as long as its peek. After that the list lives in
+    /// the bell: hovering it brings the card back, for as long as anything is
+    /// waiting.
+    ///
+    /// Returns whether the card had somewhere to be seen.
+    @discardableResult
+    func showInbox(_ items: [SessionPrompt], enabled: Bool, announce: Bool,
+                   duration: TimeInterval) -> Bool {
+        if model.showsInbox != enabled { model.showsInbox = enabled }
+        if model.inbox != items {
+            withAnimation(.easeOut(duration: 0.18)) { model.inbox = items }
+        }
+        if items.isEmpty, model.inboxAnnounced { model.inboxAnnounced = false }
+        updateInteractiveRects()
+        guard visibility != .hidden, panel != nil else {
+            Log.usage.debug("inbox announcement skipped: notch hidden")
+            return false
+        }
+        guard enabled, announce, !items.isEmpty else { return true }
+
+        withAnimation(.easeOut(duration: 0.18)) { model.inboxAnnounced = true }
+        // No pid handed to the peek: the card's own rows are the answer, and a
+        // click that raised a session from anywhere on the notch would make
+        // clearing a row impossible.
+        peek(for: duration, focusing: nil)
+        announceWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, let panel = self.panel else { return }
+                self.announceWork = nil
+                // A pointer already on the card has taken it over from the
+                // announcement; it stays for as long as the pointer does.
+                if self.isOverStackCard(self.localCursor(in: panel.frame)) {
+                    self.model.hoveredIndex = self.model.inboxIndex
+                }
+                withAnimation(.easeOut(duration: 0.18)) { self.model.inboxAnnounced = false }
+                self.updateInteractiveRects()
+            }
+        }
+        announceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
+        return true
+    }
+
+    private var announceWork: DispatchWorkItem?
+
+    /// Fold the notch after the card has been answered by going there — the
+    /// same close a clicked peek gets, since the notch has done its job.
+    func foldAfterAnswer() {
+        peekWork?.cancel()
+        peekWork = nil
+        peekUntil = nil
+        announceWork?.cancel()
+        announceWork = nil
+        // The card goes either way — a notch held open by a setting still has
+        // no reason to keep showing a list you have just acted on.
+        withAnimation(.easeOut(duration: 0.18)) {
+            model.inboxAnnounced = false
+            model.hoveredIndex = nil
+        }
+        guard !model.isPinned, !model.isAlwaysOn else { return updateInteractiveRects() }
+        withAnimation(NotchMotion.unfold) {
+            model.isExpanded = false
+            model.hoveredIndex = nil
+        }
+        setPointing(false)
+        updateInteractiveRects()
+    }
+
     /// How long after a peek folds a click still counts as answering it. Covers
     /// the reach for the mouse that started while the notch was still open.
     private static let focusGrace: TimeInterval = 2
@@ -1184,7 +1388,7 @@ final class NotchWindowController {
 
     func cellIndex(along: CGFloat) -> Int? {
         let pitch = model.cellPitch * model.sizeScale
-        for index in model.snapshots.indices {
+        for index in 0..<model.cellCount {
             let centre = model.slack + model.ringCenter(index: index) * model.sizeScale
             if abs(along - centre) <= pitch / 2 { return index }
         }

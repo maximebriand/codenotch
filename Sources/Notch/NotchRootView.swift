@@ -99,6 +99,56 @@ struct NotchRootView: View {
                         x: model.edge.outward.x * Design.px(24),
                         y: model.edge.outward.y * Design.px(24)
                     )))
+                } else if model.showsInboxCard, let index = model.inboxIndex {
+                    // Ahead of the rings' tooltips: while it is announcing,
+                    // the pointer crosses a ring on its way to a row, and a
+                    // tooltip taking the card's place halfway there would
+                    // leave nothing to press.
+                    InboxCard(
+                        items: model.inbox,
+                        direction: model.edge.tooltipDirection,
+                        tailOffset: inboxTailOffset(index: index),
+                        onGo: { model.onAnswerPrompt?($0, true) },
+                        onDismiss: { model.onAnswerPrompt?($0, false) }
+                    )
+                    .position(inboxCentre(place, index: index))
+                    .transition(.opacity.combined(with: .offset(
+                        x: model.edge.outward.x * Design.px(24),
+                        y: model.edge.outward.y * Design.px(24)
+                    )))
+                } else if model.showsSoundCard, let index = model.soundIndex {
+                    let height = SoundCard.height(deviceCount: model.sound.devices.count,
+                                                  playerCount: model.nowPlaying.count,
+                                                  appCount: model.appVolumes.count)
+                    SoundCard(
+                        state: model.sound,
+                        players: model.nowPlaying,
+                        onMedia: { model.onMediaCommand?($0, $1) },
+                        direction: model.edge.tooltipDirection,
+                        tailOffset: stackCardTailOffset(index: index, height: height),
+                        onSelect: { model.onSelectOutput?($0) },
+                        onVolume: { model.onSetVolume?($0) },
+                        onMute: { model.onMuteMicrophone?($0) },
+                        apps: model.appVolumes,
+                        onAppVolume: { model.onSetAppVolume?($0, $1) }
+                    )
+                    .position(stackCardCentre(place, index: index, height: height))
+                    .transition(.opacity.combined(with: .offset(
+                        x: model.edge.outward.x * Design.px(24),
+                        y: model.edge.outward.y * Design.px(24)
+                    )))
+                } else if model.showsLauncherCard, let index = model.launcherIndex {
+                    LauncherCard(
+                        entries: model.launcher,
+                        direction: model.edge.tooltipDirection,
+                        tailOffset: stackCardTailOffset(index: index, height: LauncherCard.cardHeight),
+                        onLaunch: { model.onLaunch?($0, $1, $2) }
+                    )
+                    .position(stackCardCentre(place, index: index, height: LauncherCard.cardHeight))
+                    .transition(.opacity.combined(with: .offset(
+                        x: model.edge.outward.x * Design.px(24),
+                        y: model.edge.outward.y * Design.px(24)
+                    )))
                 } else if let snapshot = model.hoveredSnapshot, let index = model.hoveredIndex,
                    model.isExpanded {
                     TooltipCard(
@@ -149,7 +199,7 @@ struct NotchRootView: View {
     /// than into it.
     private var orbMotion: Animation {
         model.isExpanded
-            ? NotchMotion.stagger(index: model.snapshots.count)
+            ? NotchMotion.stagger(index: model.cellCount)
             : NotchMotion.merge
     }
 
@@ -335,15 +385,52 @@ struct NotchRootView: View {
                 )).animation(motion(NotchMotion.unfold)))
         }
 
+        // The bell closes the stack, after the rings — see `NotchViewModel.inboxIndex`.
+        let bell = Group {
+            if model.showsInbox {
+                InboxCell(count: model.inbox.count)
+                    .frame(width: model.edge.isVertical ? nil : NotchLayout.cellAlong(for: model.edge))
+                    .opacity(model.isExpanded ? 1 : 0)
+                    .offset(
+                        x: model.isExpanded ? 0 : model.edge.outward.x * Design.px(28),
+                        y: model.isExpanded ? 0 : model.edge.outward.y * Design.px(28)
+                    )
+                    .animation(motion(NotchMotion.stagger(index: model.snapshots.count)),
+                               value: model.isExpanded)
+            }
+            if model.showsLauncher {
+                LauncherCell(workspaceCount: model.launcher.count)
+                    .frame(width: model.edge.isVertical ? nil : NotchLayout.cellAlong(for: model.edge))
+                    .opacity(model.isExpanded ? 1 : 0)
+                    .offset(
+                        x: model.isExpanded ? 0 : model.edge.outward.x * Design.px(28),
+                        y: model.isExpanded ? 0 : model.edge.outward.y * Design.px(28)
+                    )
+                    .animation(motion(NotchMotion.stagger(index: model.launcherIndex ?? 0)),
+                               value: model.isExpanded)
+            }
+            if model.showsSound {
+                SoundCell(state: model.sound)
+                    .frame(width: model.edge.isVertical ? nil : NotchLayout.cellAlong(for: model.edge))
+                    .opacity(model.isExpanded ? 1 : 0)
+                    .offset(
+                        x: model.isExpanded ? 0 : model.edge.outward.x * Design.px(28),
+                        y: model.isExpanded ? 0 : model.edge.outward.y * Design.px(28)
+                    )
+                    .animation(motion(NotchMotion.stagger(index: model.soundIndex ?? 0)),
+                               value: model.isExpanded)
+            }
+        }
+
         Group {
             if model.edge.isVertical {
-                VStack(spacing: model.cellSpacing) { stack }
+                VStack(spacing: model.cellSpacing) { stack; bell }
                     .padding(.top, leadIn)
                     // The contents keep the expanded layout while folding, so
                     // the stack does not reflow on its way out; the shape clips it.
                     .frame(width: NotchLayout.bodyDepth(for: model.edge))
             } else {
-                HStack(spacing: model.cellSpacing) { stack }
+                HStack(spacing: model.cellSpacing) { stack; bell }
                     .padding(.leading, leadIn)
                     .frame(height: NotchLayout.bodyDepth(for: model.edge))
             }
@@ -460,6 +547,42 @@ struct NotchRootView: View {
         // `tooltipInset` already ends where the drawn notch does.
         return place.point(
             along: model.tooltipAlong(index: index, length: tooltipLength(snapshot)),
+            across: model.tooltipInset + (NotchLayout.tailLength + card) / 2
+        )
+    }
+
+    /// A card of `height` hanging off cell `index` — the to-do and launcher
+    /// cards, whose size is their own rather than a snapshot's.
+    private func stackCardTailOffset(index: Int, height: CGFloat) -> CGFloat {
+        let length = model.edge.isVertical ? height : NotchLayout.cardWidth
+        return model.slack + model.ringCenter(index: index) * model.sizeScale
+            - model.tooltipAlong(index: index, length: length)
+    }
+
+    private func stackCardCentre(_ place: NotchPlacement, index: Int, height: CGFloat) -> CGPoint {
+        let length = model.edge.isVertical ? height : NotchLayout.cardWidth
+        let card = model.edge.isVertical ? NotchLayout.cardWidth : height
+        return place.point(
+            along: model.tooltipAlong(index: index, length: length),
+            across: model.tooltipInset + (NotchLayout.tailLength + card) / 2
+        )
+    }
+
+    private var inboxCardLength: CGFloat {
+        let height = InboxCard.height(itemCount: model.inbox.count)
+        return model.edge.isVertical ? height : NotchLayout.cardWidth
+    }
+
+    private func inboxTailOffset(index: Int) -> CGFloat {
+        model.slack + model.ringCenter(index: index) * model.sizeScale
+            - model.tooltipAlong(index: index, length: inboxCardLength)
+    }
+
+    private func inboxCentre(_ place: NotchPlacement, index: Int) -> CGPoint {
+        let height = InboxCard.height(itemCount: model.inbox.count)
+        let card = model.edge.isVertical ? NotchLayout.cardWidth : height
+        return place.point(
+            along: model.tooltipAlong(index: index, length: inboxCardLength),
             across: model.tooltipInset + (NotchLayout.tailLength + card) / 2
         )
     }

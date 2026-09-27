@@ -153,12 +153,46 @@ final class ClaudeSessionMonitor: ObservableObject, AgentActivityMonitor {
     /// terminal interface knows — exactly as it was.
     static func state(of record: ClaudeSessionRecord,
                       transcripts: ClaudeTranscriptReader?) -> AgentSession {
-        guard !record.reportsStatus,
-              let sessionID = record.sessionID,
-              let activity = transcripts?.activity(sessionID: sessionID, cwd: record.cwd)
-        else { return record.session }
-        return record.session(state: activity.turn == .inFlight ? .busy : .idle,
-                              since: activity.since)
+        let session: AgentSession
+        if !record.reportsStatus,
+           let sessionID = record.sessionID,
+           let activity = transcripts?.activity(sessionID: sessionID, cwd: record.cwd) {
+            session = record.session(state: activity.turn == .inFlight ? .busy : .idle,
+                                     since: activity.since)
+        } else {
+            session = record.session
+        }
+        // A working session's transcript grows every few seconds and nothing
+        // reads what it is about until it stops, so only a session at rest is
+        // described.
+        guard session.state != .busy else { return session }
+        return described(session, of: record, transcripts: transcripts)
+    }
+
+    /// A session at rest, with what it is about — and, while it waits, what it
+    /// is asking, or once its turn is over, what it said last — filled in from
+    /// its transcript: what the notch's card needs to let you decide whether to
+    /// go there without going there first.
+    ///
+    /// The registry's own `waitingFor` wins where there is one: it is the
+    /// terminal's word for what is on screen, and the transcript is an
+    /// inference from the last unanswered call.
+    ///
+    /// A session at rest holds still, so the reader's cache answers every tick
+    /// after the first without touching the file again.
+    static func described(_ session: AgentSession, of record: ClaudeSessionRecord,
+                          transcripts: ClaudeTranscriptReader?) -> AgentSession {
+        guard let sessionID = record.sessionID,
+              let prompt = transcripts?.prompt(sessionID: sessionID, cwd: record.cwd)
+        else { return session }
+        return AgentSession(id: session.id, name: session.name, detail: session.detail,
+                            state: session.state,
+                            // Only a waiting session is asking; a finished
+                            // one's last unanswered call is history.
+                            waitingFor: session.state == .waiting
+                                ? session.waitingFor ?? prompt.ask : session.waitingFor,
+                            since: session.since, processID: session.processID,
+                            topic: prompt.title, lastReply: prompt.reply)
     }
 
     /// One session can hold two registry records at once: resuming after a

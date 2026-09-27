@@ -15,6 +15,9 @@ import Foundation
 /// * **Ghostty** (1.3+) scripts its terminals with an id, a title and a
 ///   *working directory* but no tty, so it is matched by the session's cwd
 ///   like cmux; `focus` selects the tab and raises its window in one go.
+/// * **Wave** has no dictionary at all; its `wsh` CLI is the interface, and it
+///   can address any block but only *focus* one in the tab it is already on.
+///   A session anywhere else is badged instead — see `WaveTerminal`.
 /// * Everything else publishes nothing (Warp), and the caller falls back to
 ///   raising the app — the honest answer rather than a silent no-op.
 enum TerminalTabFocus {
@@ -91,10 +94,49 @@ enum TerminalTabFocus {
                   end repeat
                 end tell
                 """)
+        case WaveTerminal.bundleID:
+            // Wave is the one terminal here that can be *told* where a session
+            // is without being able to *go* there — see `WaveTerminal` for why.
+            guard let block = WaveTerminal.block(of: pid) else { return false }
+            // `focusblock` selects a block but never changes tab, and succeeds
+            // either way — so the tab is brought up first, by the keystroke
+            // Wave itself binds to it. Wave is already frontmost by now: see
+            // `SessionFocus.focus`.
+            let position = WaveTerminal.tabPosition(of: block)
+            let onScreen = position?.isActive ?? true
+            if !onScreen, let position, position.index < 9,
+               WaveTerminal.canSwitchTabs(prompt: true),
+               WaveTerminal.switchToTab(number: position.index + 1) {
+                // Wave switches on its own run loop; a block focused before
+                // the tab has landed is focused in the tab being left.
+                Thread.sleep(forTimeInterval: 0.35)
+                return WaveTerminal.focus(block)
+            }
+            if onScreen, WaveTerminal.focus(block) { return true }
+            // Past the ninth tab, or no permission yet: the tab lights up
+            // instead, and one click finishes the journey.
+            WaveTerminal.badge(block, icon: revealBadgeIcon, color: revealBadgeColor)
+            // Cleared on a timer rather than left to the session's own lifetime:
+            // this badge answers "which tab is it in", a question that is over
+            // the moment you have looked, while the session it points at may run
+            // for another hour. `--pid` is right for the notification badge,
+            // which means something else — see `WaveTerminal.badge`.
+            DispatchQueue.global(qos: .utility)
+                .asyncAfter(deadline: .now() + revealBadgeDuration) {
+                    WaveTerminal.clearBadge(block)
+                }
+            return false
         default:
             return false
         }
     }
+
+    /// The mark left on a block that could not be focused, and how long it
+    /// stays. Amber rather than red: nothing is wrong, the tab is just over
+    /// there.
+    static let revealBadgeIcon = "circle-arrow-right"
+    static let revealBadgeColor = "#f5a623"
+    static let revealBadgeDuration: TimeInterval = 6
 
     // MARK: - cmux
 
@@ -193,13 +235,20 @@ enum TerminalTabFocus {
 
     /// A short subprocess with its stdout collected concurrently, so a large
     /// reply cannot fill the pipe and wedge the writer. Nil on any failure.
+    ///
+    /// `environment` replaces the inherited one outright rather than adding to
+    /// it — nil keeps the inheritance, which is what osascript wants. See
+    /// `WaveTerminal`, the one caller that needs to hand a subprocess a
+    /// credential it does not have itself.
     static func run(_ launchPath: String, _ arguments: [String],
+                    environment: [String: String]? = nil,
                     timeout: TimeInterval = 3) -> String? {
         let process = Process()
         let pipe = Pipe()
         let errorPipe = Pipe()
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
+        process.environment = environment
         process.standardOutput = pipe
         process.standardError = errorPipe
         do {

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreAudio
 import SwiftUI
 
 /// One notch per display: owns a `NotchWindowController` for each screen the
@@ -76,6 +77,48 @@ final class NotchFleet {
     var onRefreshProvider: ((String) async -> Void)?
     var onOpenSettings: (() -> Void)?
     var onFocusSession: ((pid_t) -> Void)?
+    /// The waiting-session card's answers: go there (true), or not now.
+    var onAnswerPrompt: ((SessionPrompt, Bool) -> Void)? {
+        didSet {
+            for controller in controllers.values { controller.model.onAnswerPrompt = onAnswerPrompt }
+        }
+    }
+    /// The to-do list and whether the bell is shown, kept so a display
+    /// plugged in later shows them too.
+    private var inbox: [SessionPrompt] = []
+    private var inboxEnabled = false
+    /// The same for the Nx launcher.
+    private var launcher: [NxLauncher.Entry] = []
+    private var launcherEnabled = false
+    var onLaunch: ((NxLauncher.Entry, String, String) -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onLaunch = onLaunch } }
+    }
+    /// The same for the sound cell.
+    private var sound = AudioOutputs.State.empty
+    private var soundEnabled = false
+    var onSelectOutput: ((AudioDeviceID) -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onSelectOutput = onSelectOutput } }
+    }
+    private var appVolumes: [AppVolumeRow] = []
+    var onSetAppVolume: ((String, Float) -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onSetAppVolume = onSetAppVolume } }
+    }
+    var onMuteMicrophone: ((Bool) -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onMuteMicrophone = onMuteMicrophone } }
+    }
+    var onSetVolume: ((Float) -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onSetVolume = onSetVolume } }
+    }
+    private var nowPlaying: [NowPlaying] = []
+    var onMediaCommand: ((NowPlaying, NowPlaying.Command) -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onMediaCommand = onMediaCommand } }
+    }
+    var onSoundOpened: (() -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onSoundOpened = onSoundOpened } }
+    }
+    var onLauncherOpened: (() -> Void)? {
+        didSet { for controller in controllers.values { controller.model.onLauncherOpened = onLauncherOpened } }
+    }
     var signInItems: [(title: String, action: () -> Void)] = []
     /// An ⌥-drag on any one panel settled at a new offset. Persisting it is
     /// Preferences' job, same division `apply(edge:)` already keeps.
@@ -308,6 +351,70 @@ final class NotchFleet {
         return shown
     }
 
+    /// Hand every panel the to-do list.
+    ///
+    /// `announce` opens the notch on the list — true only when something new
+    /// has arrived, so a list that is merely unchanged does not pop the notch
+    /// open again on every reading.
+    ///
+    /// Returns whether any notch had somewhere to show it.
+    @discardableResult
+    func setInbox(_ items: [SessionPrompt], enabled: Bool, announce: Bool,
+                  duration: TimeInterval) -> Bool {
+        inbox = items
+        inboxEnabled = enabled
+        var shown = false
+        for controller in controllers.values {
+            shown = controller.showInbox(items, enabled: enabled, announce: announce,
+                                         duration: duration) || shown
+        }
+        return shown
+    }
+
+    /// Hand every panel the launcher's workspaces. ▶ shows only while there is
+    /// at least one — an empty launcher is a cell that does nothing.
+    func setLauncher(_ entries: [NxLauncher.Entry], enabled: Bool) {
+        launcher = entries
+        launcherEnabled = enabled && !entries.isEmpty
+        for controller in controllers.values {
+            if controller.model.launcher != entries { controller.model.launcher = entries }
+            if controller.model.showsLauncher != launcherEnabled {
+                controller.model.showsLauncher = launcherEnabled
+            }
+        }
+    }
+
+    /// Hand every panel the sound outputs.
+    func setSound(_ state: AudioOutputs.State, enabled: Bool) {
+        sound = state
+        soundEnabled = enabled
+        for controller in controllers.values {
+            if controller.model.sound != state { controller.model.sound = state }
+            if controller.model.showsSound != enabled { controller.model.showsSound = enabled }
+        }
+    }
+
+    /// Hand every panel the per-app levels.
+    func setAppVolumes(_ rows: [AppVolumeRow]) {
+        appVolumes = rows
+        for controller in controllers.values where controller.model.appVolumes != rows {
+            controller.model.appVolumes = rows
+        }
+    }
+
+    /// Hand every panel what is playing.
+    func setNowPlaying(_ players: [NowPlaying]) {
+        nowPlaying = players
+        for controller in controllers.values where controller.model.nowPlaying != players {
+            controller.model.nowPlaying = players
+        }
+    }
+
+    /// Close every notch once a waiting session has been answered by going to it.
+    func foldAfterAnswer() {
+        for controller in controllers.values { controller.foldAfterAnswer() }
+    }
+
     func setRefreshing(_ ids: Set<String>) {
         self.refreshing = ids
         for controller in controllers.values {
@@ -433,6 +540,23 @@ final class NotchFleet {
         controller.onOpenSettings = onOpenSettings
         controller.model.onOpenSettings = onOpenSettings
         controller.model.onFocusSession = onFocusSession
+        controller.model.onAnswerPrompt = onAnswerPrompt
+        controller.model.showsInbox = inboxEnabled
+        controller.model.inbox = inbox
+        controller.model.showsLauncher = launcherEnabled
+        controller.model.launcher = launcher
+        controller.model.onLaunch = onLaunch
+        controller.model.onLauncherOpened = onLauncherOpened
+        controller.model.showsSound = soundEnabled
+        controller.model.sound = sound
+        controller.model.onSelectOutput = onSelectOutput
+        controller.model.onSetVolume = onSetVolume
+        controller.model.onMuteMicrophone = onMuteMicrophone
+        controller.model.appVolumes = appVolumes
+        controller.model.onSetAppVolume = onSetAppVolume
+        controller.model.nowPlaying = nowPlaying
+        controller.model.onMediaCommand = onMediaCommand
+        controller.model.onSoundOpened = onSoundOpened
         controller.onReposition = onReposition
         controller.onMoveToEdge = onMoveToEdge
         controller.signInItems = signInItems

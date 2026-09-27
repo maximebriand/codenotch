@@ -1159,6 +1159,57 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // Its own section because it is about *windows*, not about the
+            // notch: what the switcher opens onto, and what happens on its own
+            // when a session stops to ask something.
+            Section(L10n.t("Sessions in windows")) {
+                Toggle(L10n.t("Open the session list with \u{2325}\u{2318}S"),
+                       isOn: $preferences.sessionSwitcherHotKey)
+
+                Text(L10n.t("A shortcut belongs to whichever app registers it first, system-wide. If another app already has this one, switch this off and open the list from the menu bar instead."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Toggle(L10n.t("Show a session waiting on you in the notch"),
+                       isOn: $preferences.showsSessionPrompts)
+
+                Text(L10n.t("What it is about and what it is asking, with a choice to go there or leave it for later. The card stays until you answer it, or the session moves on by itself."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Toggle(L10n.t("Sound output in the notch"),
+                       isOn: $preferences.showsSoundCell)
+
+                Toggle(L10n.t("Pause music during calls"),
+                       isOn: $preferences.pausesMusicDuringCalls)
+
+                Text(L10n.t("Spotify and YouTube pause while an app is using the microphone — Teams, Zoom, Meet — and pick up again when it lets go."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Toggle(L10n.t("Nx launcher in the notch"),
+                       isOn: $preferences.showsNxLauncher)
+
+                Text(L10n.t("The Nx workspaces your Wave terminals are in, with each project's targets. A target runs in a new block beside your terminal. Codenotch needs Accessibility permission to switch Wave to that tab."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Toggle(L10n.t("Mark the Wave tab of a session waiting on you"),
+                       isOn: $preferences.marksBlockedWaveBlock)
+
+                Toggle(L10n.t("Bring its window to the front"),
+                       isOn: $preferences.raisesBlockedSession)
+
+                Text(L10n.t("Only when a session stops to ask you something, never at the end of a turn. This is the one thing Codenotch does that takes focus away from what you are typing into, which is why it starts switched off."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section(L10n.t("When a limit is reached")) {
                 Toggle(L10n.t("Show notification for session limit"), isOn: $preferences.announceSessionLimitReached)
 

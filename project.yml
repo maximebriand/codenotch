@@ -90,6 +90,8 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSLocalNetworkUsageDescription: "Codenotch answers your phone on this network so it can show your usage."
+        NSAudioCaptureUsageDescription: "Codenotch sets one app's volume apart from the others — Teams quieter than your music — by playing that app's sound back at the level you choose."
+        NSAppleEventsUsageDescription: "Codenotch shows and controls what Spotify and YouTube are playing, and finds the terminal tab a session runs in."
         # --- Sparkle -------------------------------------------------------
         # Beside the download itself, on hivinz.com. It used to point at a
         # GitHub Pages URL for a repo that was never created, so every check

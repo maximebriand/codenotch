@@ -22,6 +22,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var onRefreshProvider: ((String) -> Void)?
     /// Refetch every provider.
     var onRefreshAll: (() -> Void)?
+    /// Opens the session switcher. The shortcut is the fast way in; this is the
+    /// one that can be found without knowing it exists.
+    var onOpenSwitcher: (() -> Void)?
     /// Switch limits in the bar on or off — the same Settings preference,
     /// written back through the same place, never a second one kept here. The
     /// controller stores no answer of its own: it asks `limits.isOn`, which is
@@ -198,6 +201,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         showLimits.state = limits.isOn ? .on : .off
         menu.addItem(showLimits)
         menu.addItem(.separator())
+        let switcher = NSMenuItem(title: L10n.t("Active sessions…"),
+                                  action: #selector(openSwitcher), keyEquivalent: "s")
+        // Shown against the same combination `GlobalHotKey` registers, so the
+        // menu teaches the shortcut rather than offering a second, different one.
+        switcher.keyEquivalentModifierMask = [.option, .command]
+        switcher.target = self
+        menu.addItem(switcher)
         menu.addItem(
             withTitle: L10n.t("Refresh all"), action: #selector(refreshAll), keyEquivalent: "r"
         ).target = self
@@ -241,6 +251,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openSettings() { onOpenSettings() }
+
+    @objc private func openSwitcher() { onOpenSwitcher?() }
     @objc private func quit() { NSApp.terminate(nil) }
 
     @objc private func refreshProvider(_ sender: NSMenuItem) {

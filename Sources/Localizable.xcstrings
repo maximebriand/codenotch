@@ -39064,6 +39064,512 @@
           }
         }
       }
+    },
+    "Has a question for you": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A une question pour vous"
+          }
+        }
+      }
+    },
+    "Wants you to approve its plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attend que vous validiez son plan"
+          }
+        }
+      }
+    },
+    "Run: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exécuter : %@"
+          }
+        }
+      }
+    },
+    "Edit %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier %@"
+          }
+        }
+      }
+    },
+    "Fetch %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir %@"
+          }
+        }
+      }
+    },
+    "Use %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utiliser %@"
+          }
+        }
+      }
+    },
+    "Waiting for your answer": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attend votre réponse"
+          }
+        }
+      }
+    },
+    "Go there": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Y aller"
+          }
+        }
+      }
+    },
+    "Sessions in windows": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions dans les fenêtres"
+          }
+        }
+      }
+    },
+    "Open the session list with ⌥⌘S": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir la liste des sessions avec ⌥⌘S"
+          }
+        }
+      }
+    },
+    "A shortcut belongs to whichever app registers it first, system-wide. If another app already has this one, switch this off and open the list from the menu bar instead.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un raccourci appartient à la première app qui le réserve, dans tout le système. Si une autre app utilise déjà celui-ci, désactivez-le et ouvrez la liste depuis la barre des menus."
+          }
+        }
+      }
+    },
+    "Show a session waiting on you in the notch": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher dans l'encoche une session qui vous attend"
+          }
+        }
+      }
+    },
+    "What it is about and what it is asking, with a choice to go there or leave it for later. The card stays until you answer it, or the session moves on by itself.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son sujet et ce qu'elle demande, avec le choix d'y aller ou de laisser pour plus tard. La carte reste jusqu'à ce que vous répondiez, ou que la session reparte d'elle-même."
+          }
+        }
+      }
+    },
+    "Mark the Wave tab of a session waiting on you": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marquer l'onglet Wave d'une session qui vous attend"
+          }
+        }
+      }
+    },
+    "Bring its window to the front": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre sa fenêtre au premier plan"
+          }
+        }
+      }
+    },
+    "Only when a session stops to ask you something, never at the end of a turn. This is the one thing Codenotch does that takes focus away from what you are typing into, which is why it starts switched off.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uniquement quand une session s'arrête pour vous demander quelque chose, jamais à la fin d'un tour. C'est la seule action de Codenotch qui vous retire le focus de ce que vous tapez, d'où sa désactivation par défaut."
+          }
+        }
+      }
+    },
+    "Active sessions…": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions actives…"
+          }
+        }
+      }
+    },
+    "Active sessions": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions actives"
+          }
+        }
+      }
+    },
+    "%lld running": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en cours"
+          }
+        }
+      }
+    },
+    "%lld waiting · %lld running": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en attente · %lld en cours"
+          }
+        }
+      }
+    },
+    "No agent is running in a window right now.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun agent ne tourne dans une fenêtre pour l'instant."
+          }
+        }
+      }
+    },
+    "Finished — your turn": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminé — à vous de jouer"
+          }
+        }
+      }
+    },
+    "To do": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À faire"
+          }
+        }
+      }
+    },
+    "Nothing is waiting on you.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien ne vous attend."
+          }
+        }
+      }
+    },
+    "and %lld more — see ⌥⌘S": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "et %lld de plus — voir ⌥⌘S"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer"
+          }
+        }
+      }
+    },
+    "1 session waiting on you": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 session vous attend"
+          }
+        }
+      }
+    },
+    "%lld sessions waiting on you": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld sessions vous attendent"
+          }
+        }
+      }
+    },
+    "Nx launcher": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lanceur Nx"
+          }
+        }
+      }
+    },
+    "Nx": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nx"
+          }
+        }
+      }
+    },
+    "Open a Wave terminal in an Nx workspace and its projects show up here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez un terminal Wave dans un workspace Nx : ses projets apparaîtront ici."
+          }
+        }
+      }
+    },
+    "on screen": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "à l’écran"
+          }
+        }
+      }
+    },
+    "Nx launcher in the notch": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lanceur Nx dans l'encoche"
+          }
+        }
+      }
+    },
+    "The Nx workspaces your Wave terminals are in, with each project's targets. A target runs in a new block beside your terminal. Codenotch needs Accessibility permission to switch Wave to that tab.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les workspaces Nx de vos terminaux Wave, avec les cibles de chaque projet. Une cible se lance dans un nouveau block à côté de votre terminal. Codenotch a besoin de l'autorisation Accessibilité pour basculer Wave sur cet onglet."
+          }
+        }
+      }
+    },
+    "Sound output": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sortie son"
+          }
+        }
+      }
+    },
+    "No output device.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune sortie audio."
+          }
+        }
+      }
+    },
+    "This output has no volume of its own.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette sortie n'a pas de volume propre."
+          }
+        }
+      }
+    },
+    "Sound output in the notch": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sortie son dans l'encoche"
+          }
+        }
+      }
+    },
+    "To control it, allow JavaScript from Apple Events in Chrome (View › Developer).": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour piloter : dans Chrome, Présentation › Développeur › Autoriser JavaScript depuis les Apple Events."
+          }
+        }
+      }
+    },
+    "Microphone": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micro"
+          }
+        }
+      }
+    },
+    "In use — in a call": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisé — en appel"
+          }
+        }
+      }
+    },
+    "Unmute": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réactiver"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couper"
+          }
+        }
+      }
+    },
+    "Pause music during calls": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre la musique en pause pendant les appels"
+          }
+        }
+      }
+    },
+    "Spotify and YouTube pause while an app is using the microphone — Teams, Zoom, Meet — and pick up again when it lets go.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify et YouTube se mettent en pause quand une app utilise le micro — Teams, Zoom, Meet — et reprennent quand elle le libère."
+          }
+        }
+      }
+    },
+    "Apps": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

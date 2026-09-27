@@ -26,6 +26,11 @@ enum SessionFocus {
         let app = owningApp(of: pid)
         let tty = tty(of: pid)
         let cwd = currentDirectory(of: pid)
+        // Wave changes tab by keystroke, and a keystroke goes to whichever app
+        // is in front — so Wave is raised before its tab is chosen, not after.
+        if let app, app.bundleIdentifier == WaveTerminal.bundleID {
+            _ = await bringForward(app)
+        }
         await Task.detached(priority: .userInitiated) {
             _ = TerminalTabFocus.selectTab(bundleID: app?.bundleIdentifier, pid: pid, tty: tty, cwd: cwd)
         }.value
@@ -33,7 +38,29 @@ enum SessionFocus {
             Log.usage.debug("no owning app for pid \(pid, privacy: .public)")
             return false
         }
-        return await MainActor.run { app.activate() }
+        return await bringForward(app)
+    }
+
+    /// Raise an application from a notch that is never itself active.
+    ///
+    /// `NSRunningApplication.activate()` is a request under macOS 14's
+    /// cooperative activation, and the system turns it down when the app asking
+    /// is not the active one — which the notch never is, its panel being
+    /// non-activating by design. The click went through and nothing moved.
+    /// Opening the app through Launch Services is the user-initiated path, and
+    /// the system honours it.
+    @MainActor
+    static func bringForward(_ app: NSRunningApplication) async -> Bool {
+        guard let url = app.bundleURL else { return app.activate() }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        do {
+            _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+            return true
+        } catch {
+            Log.usage.debug("open \(url.lastPathComponent, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            return app.activate()
+        }
     }
 
     /// The process's controlling terminal, named the way ps prints it
